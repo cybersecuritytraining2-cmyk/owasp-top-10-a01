@@ -1,0 +1,18 @@
+# ── Frontend ──────────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ── Backend (Rails) ───────────────────────────────────────────────────────
+backend/log/*
+!backend/log/.keep
+backend/tmp/*
+!backend/tmp/.keep
+backend/.bundle/
+backend/vendor/bundle/
+
+# ── General ───────────────────────────────────────────────────────────────
+*.log
+.DS_Store
+.env
+.env.*
