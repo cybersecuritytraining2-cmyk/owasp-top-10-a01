@@ -7,6 +7,8 @@ import {
   transfer,
   payCard,
   openAccount,
+  exportStatement,
+  downloadExport,
 } from "@/services/api.js";
 
 const router = useRouter();
@@ -17,6 +19,10 @@ const loading = ref(true);
 const statementAccount = ref("");
 const statement = ref(null);
 const statementError = ref("");
+
+// statement export
+const exportMsg = ref("");
+const exportErr = ref("");
 
 // transfer form
 const transferTo = ref("");
@@ -93,6 +99,25 @@ async function submitPay() {
     await load();
   } catch (e) {
     payErr.value = e.response?.data?.error || "Payment failed.";
+  }
+}
+
+async function exportStatementCsv() {
+  exportMsg.value = exportErr.value = "";
+  try {
+    const { data } = await exportStatement(statementAccount.value.trim());
+    // Pull the generated file back (the request carries the bearer token) and
+    // hand it to the browser as a download.
+    const blob = await downloadExport(data.file);
+    const url = URL.createObjectURL(blob.data);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = data.file;
+    a.click();
+    URL.revokeObjectURL(url);
+    exportMsg.value = `Exported ${data.file}.`;
+  } catch (e) {
+    exportErr.value = e.response?.data?.error || "Export failed.";
   }
 }
 
@@ -259,8 +284,17 @@ async function submitOpenAccount() {
             >
               View
             </button>
+            <button
+              @click="exportStatementCsv"
+              class="text-sm border border-line hover:border-brand text-sub hover:text-text rounded-lg px-3 py-1.5 transition"
+            >
+              Export CSV
+            </button>
           </div>
         </div>
+
+        <p v-if="exportMsg" class="text-pos text-sm mb-2">{{ exportMsg }}</p>
+        <p v-if="exportErr" class="text-neg text-sm mb-2">{{ exportErr }}</p>
 
         <p v-if="statementError" class="text-neg text-sm">{{ statementError }}</p>
 

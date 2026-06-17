@@ -15,6 +15,10 @@ Rails.application.routes.draw do
     # Transaction history for an account
     get "accounts/:account_number/transactions", to: "accounts#transactions"
 
+    # Statement exports — generate a CSV file, then download it back
+    post "exports",      to: "exports#create"
+    get  "exports/*path", to: "exports#download", format: false
+
     # Move money to another customer by account number
     post "transfers", to: "transfers#create"
 

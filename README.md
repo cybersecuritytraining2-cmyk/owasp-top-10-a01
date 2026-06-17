@@ -5,15 +5,21 @@ A01:2021 — Broken Access Control**. You will log in as an ordinary customer an
 use the application's own features to access money and data that should never be
 yours.
 
-It also carries two further, deliberately planted server-side flaws on the
-**“Open a new account”** feature so you can contrast bug classes under tooling:
+It also carries four further, deliberately planted server-side flaws so you can
+contrast bug classes under tooling. On the **“Open a new account”** feature:
 
 - **Server-Side Template Injection (SSTI → RCE)** — A03:2021 Injection.
 - **Mass Assignment** — A08:2021 Software & Data Integrity Failures / the OWASP
   API Top 10 *Broken Object Property Level Authorization*.
 
+On the **“Export statement to CSV”** feature:
+
+- **Predictable export filename** — A01/A04 *Insecure Design*: the file id only
+  *looks* random.
+- **Path Traversal** — A01/A05: the download endpoint reads any file on disk.
+
 The contrast is the point: the access-control flaws are invisible to a SAST scan,
-while the injection and mass-assignment flaws light it up.
+while the injection, mass-assignment and path-traversal flaws light it up.
 
 > ⚠️ **Training use only.** This app ships with intentional vulnerabilities, weak
 > secrets, and seeded personal data. Never deploy it anywhere reachable from the
@@ -32,6 +38,8 @@ customer can:
 - **Pay down their credit card** from one of their accounts.
 - **Open a new account** by giving it a nickname (it opens with a $0.00 balance
   and shows a personalized welcome banner).
+- **Export a statement to CSV** — generate a downloadable CSV of an account's
+  transaction history.
 
 There are three demo customers. Their credentials are shown right on the login
 screen:
@@ -67,10 +75,11 @@ get stuck.
 ## Your objectives
 
 The core of this exercise is **access control** — the app authenticates you fine,
-but it is sloppy about checking *what you are allowed to do* once you are in. Two
-bonus objectives (4 and 5) cover injection and mass assignment on the new
-**“Open a new account”** feature. Sign in as **Alice** and try to achieve each of
-the following:
+but it is sloppy about checking *what you are allowed to do* once you are in. Four
+bonus objectives (4–7) cover injection and mass assignment on the
+**“Open a new account”** feature, and a predictable filename plus path traversal
+on the **“Export statement”** feature. Sign in as **Alice** and try to achieve
+each of the following:
 
 1. **Pay off your own credit card using another customer's money.**
    You should only be able to draw from *your* accounts. Can you make Bob pay
@@ -95,6 +104,17 @@ the following:
    nickname. But the server builds the account from whatever the request body
    contains. Can you make it accept a starting **balance** the form never asked
    for?
+
+6. **Download another customer's statement export.** *(Predictable filename)*
+   Use **Export CSV** and look at the filename you get back. It looks random — but
+   is it? Work out how it is generated, then fetch *someone else's* export without
+   ever being given its name. (The download endpoint never checks who owns the
+   file.)
+
+7. **Read a file that isn't a statement.** *(Path Traversal)*
+   The export download endpoint serves files by name from a folder on the server.
+   What happens if the “name” you ask for points *outside* that folder? See if you
+   can read the app's own source — and what it leaks.
 
 For each one, figure out **what the correct check would have been** and where it
 is missing.
@@ -130,21 +150,25 @@ exploitable. Compare `cards_controller.rb` (vulnerable) with
 ```bash
 cd backend && bin/brakeman
 ```
-**Brakeman finds the injection and the mass assignment — and is blind to all
-three access-control bugs. That split is the lesson.** It reports exactly two
-warnings:
+**Brakeman finds the injection, the mass assignment and the path traversal — and
+is blind to every access-control bug, including the predictable filename. That
+split is the lesson.** It reports exactly three warnings:
 
 | Brakeman finding | Confidence | This exercise |
 |------------------|-----------|---------------|
 | `Template Injection` — value used directly in `ERB` | High | **Vuln 5 (SSTI)** |
+| `File Access` (`SendFile`) — param value in file name | High | **Vuln 7 (Path Traversal)** |
 | `Mass Assignment` — `permit!` allows any keys        | Medium | **Vuln 4 (Mass Assignment)** |
 
-Static analysers detect dangerous *sinks* (template eval, `permit!`, SQL strings,
-`eval`, file paths). Both bonus bugs have a sink, so Brakeman nails them. But the
-three **broken-access-control** flaws (vulns 1–3) have **no sink**: the code is
-"safe" line-by-line and only wrong relative to *who should be allowed to run it*.
-Brakeman says nothing about them. A clean — or even a non-empty — SAST report
-tells you nothing about A01; those bugs are found by humans and by DAST.
+Static analysers detect dangerous *sinks* (template eval, `permit!`, `send_file`
+with user input, SQL strings, `eval`). The bugs that have a sink (vulns 4, 5, 7),
+Brakeman nails. But the **broken-access-control** flaws (vulns 1–3) have **no
+sink**: the code is "safe" line-by-line and only wrong relative to *who should be
+allowed to run it* — Brakeman says nothing about them. The **predictable filename**
+(vuln 6) is a *design* flaw — `Digest::MD5.hexdigest(...)` is a perfectly normal,
+"safe" call; nothing tells the scanner the *input* is guessable — so it slips
+through too. A clean — or even a non-empty — SAST report tells you nothing about
+A01 or insecure design; those bugs are found by humans and by DAST.
 
 > Note: `bin/brakeman` is wired with `--ensure-latest`, so it refuses to run
 > unless you are on the newest Brakeman release. If it just prints a version
@@ -175,6 +199,7 @@ owasp-top-10-a01/
 │   │       ├── sessions_controller.rb    # login / logout
 │   │       ├── accounts_controller.rb    # /me, statement   ← VULNERABILITY 2
 │   │       │                             # open account     ← VULNERABILITIES 4 & 5
+│   │       ├── exports_controller.rb     # statement export ← VULNERABILITIES 6 & 7
 │   │       ├── transfers_controller.rb   # money transfer   (secure reference)
 │   │       ├── cards_controller.rb       # card payment     ← VULNERABILITY 1
 │   │       └── admin/dashboard_controller.rb                ← VULNERABILITY 3
@@ -306,13 +331,47 @@ You can also trigger it straight from the dashboard: type `<%= 7*7 %>` into the
 never compile user input as a template — pass the nickname as plain data (ordinary
 string interpolation in the JSON response, not ERB).
 
+### Vulnerability 6 — Download anyone's statement export (Predictable filename)
+`POST /api/exports` writes the CSV to a file whose name *looks* random —
+`statement-<32 hex chars>.csv` — but the hex is just
+`MD5("<account_number>:<today's date>")`. The MD5 hides the structure; it does not
+add any secret. Account numbers are short and sequential, so the filename is fully
+predictable, and `GET /api/exports/<name>` never checks who owns the file:
+
+```bash
+# Bob exports his statement (or just wait until he does).
+# As Alice, recompute Bob's filename for today and download it:
+NAME="statement-$(printf '%s' "5021-0002:$(date +%F)" | md5sum | cut -d' ' -f1).csv"
+curl "http://localhost:3000/api/exports/$NAME" -H "Authorization: Bearer $TOKEN"
+```
+You get Bob's full statement CSV. *Fix:* name exports with an unguessable random
+token (`SecureRandom.uuid`) and bind the file to its owner, enforcing ownership on
+download.
+
+### Vulnerability 7 — Read arbitrary files (Path Traversal)
+The download endpoint joins the requested name onto the exports directory with no
+sanitization (`File.join(EXPORT_DIR, params[:path])`) and serves it with
+`send_file`. `../` sequences climb straight out of the folder:
+
+```bash
+# Leak the seed file — hidden admin credentials and the internal API key:
+curl "http://localhost:3000/api/exports/..%2f..%2fconfig%2finitializers%2fstore.rb" \
+  -H "Authorization: Bearer $TOKEN"
+#  → ... username: "admin", password: "V@ultStr33t-0ps!2024" ...
+#  → ... ADMIN_API_KEY=vs_live_4e7b91d0c2a8 ...
+```
+Add enough `../` and you reach `/etc/passwd` and anything else the Rails user can
+read. *Fix:* resolve the path with `File.expand_path` and reject it unless it stays
+inside `EXPORT_DIR`, and constrain the name to `/\Astatement-[0-9a-f]{32}\.csv\z/`.
+
 ### The underlying theme
 The three access-control bugs are the same mistake in three costumes: **the server
 authenticates the user but trusts the client for authorization.** The correct fix
 is always to derive identity/authority from the *session* (`current_user`) on the
-server, and to check it on *every* sensitive action. The two bonus bugs add a
-second theme: **never trust the shape or content of the request body** — allow-list
-the fields you accept (vuln 4) and treat user input as data, never as code
-(vuln 5).
+server, and to check it on *every* sensitive action. The four bonus bugs add more
+themes: **never trust the shape or content of the request body** — allow-list the
+fields you accept (vuln 4) and treat user input as data, never as code (vuln 5);
+**don't rely on obscurity** — a hashed-but-predictable identifier is not a secret
+(vuln 6); and **confine file paths** built from user input (vuln 7).
 
 </details>

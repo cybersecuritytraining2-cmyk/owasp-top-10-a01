@@ -23,6 +23,13 @@ export const getTransactions = (accountNumber) =>
 
 export const openAccount = (label) => http.post("/accounts", { label });
 
+// ── Statement export ────────────────────────────────────────────────────────────
+export const exportStatement = (accountNumber) =>
+  http.post("/exports", { account_number: accountNumber });
+
+export const downloadExport = (path) =>
+  http.get(`/exports/${path}`, { responseType: "blob" });
+
 export const transfer = (toAccount, amount) =>
   http.post("/transfers", { to_account: toAccount, amount });
 
