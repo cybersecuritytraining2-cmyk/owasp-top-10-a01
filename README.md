@@ -1,29 +1,17 @@
 # Vault Street Bank — OWASP Top 10
 
-A deliberately vulnerable online-banking application built to teach the **OWASP
-Top 10**. It is a growing playground: new vulnerability classes are added over
-time, so a single realistic app eventually covers the whole list.
+A deliberately vulnerable online-banking application built to demonstrate the
+**OWASP Top 10**.
 
-> **Scope today.** The current focus is **A01:2021 — Broken Access Control**: you
-> log in as an ordinary customer and use the application's own features to access
-> money and data that should never be yours. Several other vulnerability classes
-> are already planted alongside it (see below), and more will follow.
+The following vulnerabilities have been planted in the app:
 
-It also carries four further, deliberately planted server-side flaws so you can
-contrast bug classes under tooling. On the **“Open a new account”** feature:
-
-- **Server-Side Template Injection (SSTI → RCE)** — A03:2021 Injection.
-- **Mass Assignment** — A08:2021 Software & Data Integrity Failures / the OWASP
-  API Top 10 *Broken Object Property Level Authorization*.
-
-On the **“Export statement to CSV”** feature:
-
-- **Predictable export filename** — A01/A04 *Insecure Design*: the file id only
-  *looks* random.
-- **Path Traversal** — A01/A05: the download endpoint reads any file on disk.
-
-The contrast is the point: the access-control flaws are invisible to a SAST scan,
-while the injection, mass-assignment and path-traversal flaws light it up.
+- Broken Access Control
+- Insecure Direct Object Reference (IDOR)
+- Missing Function-Level Authorization
+- Mass Assignment
+- Server-Side Template Injection (SSTI)
+- Predictable Resource Identifier (Insecure Design)
+- Path Traversal
 
 > ⚠️ **Training use only.** This app ships with intentional vulnerabilities, weak
 > secrets, and seeded personal data. Never deploy it anywhere reachable from the
@@ -78,6 +66,9 @@ There is a floating **“?” Hint button** in the bottom-right of every screen 
 get stuck.
 
 ---
+
+<details>
+<summary><strong>⚠️ Spoilers — objectives, discovery methods &amp; full walk-through (open only when you want hints)</strong></summary>
 
 ## Your objectives
 
@@ -228,8 +219,7 @@ owasp-top-10/
 
 ---
 
-<details>
-<summary><strong>⚠️ Spoilers — full solution & walk-through (open only when you're done)</strong></summary>
+## Full solution & walk-through
 
 ### Vulnerability 1 — Pay your card from someone else's account
 The UI renders the funding account as a **dropdown that only lists accounts the
