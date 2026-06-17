@@ -2,20 +2,16 @@ module Api
   class TransfersController < ApplicationController
     before_action :authenticate_user!
 
-    # POST /api/transfers — send money to another customer by account number.
+    # POST /api/transfers — backs the "Transfer money" form on the dashboard.
+    # Sends money from the signed-in customer's account to another account.
     # Body: { to_account: "5021-0003", amount: 150.0 }
-    #
-    # The source account is always the signed-in customer's own account — it is
-    # taken from `current_user`, never from the request body. This is the
-    # correct pattern; contrast it with cards#pay.
     def create
       to_account = params[:to_account].to_s
       amount     = params[:amount].to_f
 
       return render json: { error: "Amount must be positive" }, status: :unprocessable_entity if amount <= 0
 
-      # The source is always the signed-in customer's own primary account — taken
-      # from `current_user`, never from the request body. Contrast with cards#pay.
+      # Source is the signed-in customer's own primary account.
       source         = Store.primary_account(current_user)
       source_number  = source[:number]
 

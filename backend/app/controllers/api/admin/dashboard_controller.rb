@@ -1,36 +1,21 @@
 module Api
   module Admin
-    # Operations console used by Vault Street staff to monitor activity, read the
-    # application logs, and block suspicious customers. It lives under /api/admin
-    # and the matching screen is at /admin in the SPA. Neither is linked from the
-    # customer UI, but the route is present in the client-side bundle.
+    # Backs the Operations Console (the /admin screen in the SPA). Provides the
+    # activity log, transaction, and user-management views.
     class DashboardController < ApplicationController
-      # The endpoints require a valid login…
       before_action :authenticate_user!
 
-      # VULNERABILITY 3 (Broken Access Control / Missing Function-Level
-      # Authorization): these are staff-only operations, but the controller only
-      # checks that the caller is *authenticated*, not that they are an *admin*.
-      # The `require_admin!` filter exists in ApplicationController and is exactly
-      # what should guard this controller — but it is never invoked here. As a
-      # result any logged-in customer who discovers the admin routes (by reading
-      # the JS bundle or fuzzing /api/admin/*) can read the full application logs
-      # — which leak password-reset tokens, internal IPs and an API key — list
-      # every customer's transactions, and block/unblock accounts.
-      #
-      #   before_action :require_admin!   # <-- the missing line
-
-      # GET /api/admin/logs — full application log.
+      # GET /api/admin/logs — application log shown on the "logs" tab.
       def logs
         render json: { logs: Store::LOGS }
       end
 
-      # GET /api/admin/transactions — every ledger entry across all accounts.
+      # GET /api/admin/transactions — ledger feed for the "transactions" tab.
       def transactions
         render json: { transactions: Store::TRANSACTIONS.sort_by { |t| t[:created_at] }.reverse }
       end
 
-      # GET /api/admin/users — customer directory with balances.
+      # GET /api/admin/users — directory shown on the "users" tab.
       def users
         render json: {
           users: Store::USERS.values.map do |u|

@@ -36,9 +36,8 @@ export const transfer = (toAccount, amount) =>
 export const payCard = (fromAccount, amount) =>
   http.post("/cards/pay", { from_account: fromAccount, amount });
 
-// ── Operations console (staff) ────────────────────────────────────────────────
-// Internal endpoints for the Vault Street operations team. The /admin screen is
-// not linked from the customer navigation.
+// ── Operations console ──────────────────────────────────────────────────────────
+// Endpoints behind the /admin operations console.
 export const adminLogs = () => http.get("/admin/logs");
 export const adminTransactions = () => http.get("/admin/transactions");
 export const adminUsers = () => http.get("/admin/users");

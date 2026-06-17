@@ -7,7 +7,7 @@ const routes = [
   { path: "/", redirect: "/dashboard" },
   { path: "/login", component: LoginView },
   { path: "/dashboard", component: DashboardView },
-  // Internal operations console. Staff only — not shown in the customer nav.
+  // Operations console.
   { path: "/admin", component: AdminView },
 ];
 

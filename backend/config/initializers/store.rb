@@ -99,9 +99,7 @@ module Store
         ],
         card: { number: "3782 82•• •••• 1006", limit: 3_000.00, owed: 980.55 }
       },
-      # Hidden privileged account. Not advertised anywhere in the customer UI.
-      # The admin console it unlocks is reachable from the client-side router
-      # and from the /api/admin/* endpoints.
+      # Operations staff account used by the /admin console.
       {
         username: "admin", password: "V@ultStr33t-0ps!2024", name: "Vault Street Operations",
         role: "admin",
@@ -177,8 +175,7 @@ module Store
     log("WARN  auth — login failed user=carol ip=203.0.113.92 reason=bad_password attempts=3")
     log("INFO  txn  — transfer 5021-0001 -> 5021-0003 amount=150.00 status=ok")
     log("INFO  card — payment account=5021-0002 card=••7733 amount=1000.00 status=ok")
-    # Sensitive operational details a customer should never see — the reason the
-    # logs endpoint must be restricted to administrators.
+    # Operational log entries.
     log("INFO  auth — login success user=admin ip=10.42.0.2 console=/admin")
     log("WARN  ops  — password reset issued user=bob token=prt_9f3a1c7e8b24 expires=15m")
     log("INFO  ops  — nightly backup uploaded s3://vaultstreet-backups/db-2024.sql.gz")

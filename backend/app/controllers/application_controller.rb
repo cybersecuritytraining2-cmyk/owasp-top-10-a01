@@ -18,7 +18,7 @@ class ApplicationController < ActionController::API
     end
   end
 
-  # Helper available to controllers that want to enforce staff-only access.
+  # Enforces staff-only access.
   def require_admin!
     return if @current_user && @current_user[:role] == "admin"
 

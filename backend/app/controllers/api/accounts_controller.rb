@@ -4,28 +4,16 @@ module Api
   class AccountsController < ApplicationController
     before_action :authenticate_user!
 
-    # GET /api/me — the signed-in customer's own profile, balance and card.
+    # GET /api/me — loads the dashboard: the signed-in customer's profile,
+    # balance and card.
     def me
       render json: user_json(current_user)
     end
 
-    # POST /api/accounts — open a new account for the signed-in customer.
+    # POST /api/accounts — backs the "Open a new account" form on the dashboard.
+    # Creates an account for the signed-in customer and returns a welcome banner.
     # Body: { "label": "Vacation Fund" }
-    #
-    # The "Open a new account" form only collects a label/nickname. Newly opened
-    # accounts are supposed to start at a $0.00 balance and get a fresh, server-
-    # assigned account number.
     def create
-      # VULNERABILITY 4 (Mass Assignment): the new account is built straight from
-      # the request body via `params.permit!` — every key the client sends is
-      # copied onto the account hash. The UI only submits `label`, but nothing on
-      # the server restricts which attributes are accepted, so an attacker can
-      # smuggle in extra fields the form never exposes. Posting
-      #   { "label": "Savings", "balance": 250000 }
-      # opens an account pre-loaded with a quarter-million dollars of money that
-      # was never deposited; adding "number" lets them choose (or collide with)
-      # an account number. The fix is to permit only :label and to force the
-      # balance and number server-side.
       attrs = params.permit!.to_h.symbolize_keys
                     .except(:controller, :action, :format, :account)
 
@@ -42,15 +30,7 @@ module Api
                 "label=#{account[:label]} balance=#{format('%.2f', account[:balance])} " \
                 "user=#{current_user[:username]}")
 
-      # VULNERABILITY 5 (Server-Side Template Injection): the customer-supplied
-      # label is interpolated into an ERB template string that is then evaluated
-      # on the server to produce a personalized welcome banner. Because the label
-      # lands inside the template *before* ERB compiles it, any ERB tags the
-      # customer types are executed server-side: a label of "<%= 7*7 %>" renders
-      # as "49", and "<%= `id` %>" or "<%= system('…') %>" runs arbitrary shell
-      # commands as the Rails process — full remote code execution. User input
-      # must never be compiled as a template; it should be passed as plain data
-      # (e.g. ordinary string interpolation in the JSON response, not ERB).
+      # Builds the welcome banner shown in the UI after the account is created.
       welcome = ERB.new(
         "Welcome to your new #{account[:label]} account, #{current_user[:name]}!"
       ).result(binding)
@@ -65,15 +45,8 @@ module Api
       }, status: :created
     end
 
-    # GET /api/accounts/:account_number/transactions
-    # Returns the statement (transaction history) for an account.
-    #
-    # Ownership is enforced server-side: the statement can only be pulled for one
-    # of the signed-in customer's *own* accounts. The dashboard backs this with a
-    # dropdown of owned accounts, and the server re-checks here, so changing the
-    # account number in the URL to someone else's just returns 404. This is the
-    # correct pattern — contrast exports#create, which takes the account number
-    # from the request body and forgets to re-check ownership.
+    # GET /api/accounts/:account_number/transactions — backs the "Statement" view
+    # on the dashboard. Returns the transaction history for the selected account.
     def transactions
       account_number = params[:account_number]
       account = current_user[:accounts].find { |a| a[:number] == account_number }

@@ -2,24 +2,9 @@ module Api
   class CardsController < ApplicationController
     before_action :authenticate_user!
 
-    # POST /api/cards/pay — pay down your credit card balance from a bank account.
+    # POST /api/cards/pay — backs the "Pay your credit card" form on the dashboard.
+    # Pays down the signed-in customer's card from a funding account.
     # Body: { from_account: "5021-0001", amount: 100.0 }
-    #
-    # The card that gets paid is always the signed-in customer's own card. The
-    # funding account is read from the request body: the UI renders a "pay from"
-    # dropdown listing only the accounts the customer actually owns, so under
-    # normal use `from_account` is always one of their own account numbers.
-    #
-    # VULNERABILITY 1 (Broken Access Control): `from_account` is trusted from the
-    # request body and used to locate and debit a bank account with no check that
-    # the account belongs to `current_user`. The dropdown makes this hard to spot
-    # by clicking around — but the constraint lives only in the client. An
-    # attacker who intercepts the request (Burp/ZAP) and swaps the value for
-    # someone else's account number — e.g. signed in as Alice, change the body to
-    # { from_account: "5021-0002", amount: 1000 } — drains Bob's account to pay
-    # Alice's card, because the server never re-checks ownership. The funding
-    # account should be forced server-side to one of `current_user`'s accounts,
-    # exactly like transfers#create scopes the source to `current_user`.
     def pay
       from_account = params[:from_account].to_s
       amount       = params[:amount].to_f
