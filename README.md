@@ -1,9 +1,13 @@
-# Vault Street Bank — OWASP A01: Broken Access Control (+ Injection & Mass Assignment)
+# Vault Street Bank — OWASP Top 10
 
-A deliberately vulnerable online-banking application built to teach **OWASP Top 10
-A01:2021 — Broken Access Control**. You will log in as an ordinary customer and
-use the application's own features to access money and data that should never be
-yours.
+A deliberately vulnerable online-banking application built to teach the **OWASP
+Top 10**. It is a growing playground: new vulnerability classes are added over
+time, so a single realistic app eventually covers the whole list.
+
+> **Scope today.** The current focus is **A01:2021 — Broken Access Control**: you
+> log in as an ordinary customer and use the application's own features to access
+> money and data that should never be yours. Several other vulnerability classes
+> are already planted alongside it (see below), and more will follow.
 
 It also carries four further, deliberately planted server-side flaws so you can
 contrast bug classes under tooling. On the **“Open a new account”** feature:
@@ -64,8 +68,11 @@ screen:
 #   Frontend → http://localhost:5173
 ```
 
-Open **http://localhost:5173** and sign in. State is held in memory only — restart
-the backend to reset every balance, statement, and block back to the seed data.
+Open **http://localhost:5173** and sign in. State is held in memory only —
+restarting the backend is a full clean slate: every balance, statement, opened
+account, and block returns to the seed data, and any statement-export CSVs written
+to `backend/tmp/exports/` are wiped at boot (`Store.clear_exports!` in
+`config/initializers/store.rb`). Just restart the backend to reset.
 
 There is a floating **“?” Hint button** in the bottom-right of every screen if you
 get stuck.
@@ -373,5 +380,13 @@ themes: **never trust the shape or content of the request body** — allow-list 
 fields you accept (vuln 4) and treat user input as data, never as code (vuln 5);
 **don't rely on obscurity** — a hashed-but-predictable identifier is not a secret
 (vuln 6); and **confine file paths** built from user input (vuln 7).
+
+### Resetting between attempts
+All app state is in-memory, so **restarting the backend gives you a clean slate** —
+balances, opened accounts, blocks and statements all return to the seed data. The
+statement exports from vulns 6–7 are real files under `backend/tmp/exports/`; those
+are wiped at boot too (`Store.clear_exports!` in `config/initializers/store.rb`),
+so a restart also clears any CSVs you generated. If an exploit leaves the data in a
+confusing state, just restart and start over.
 
 </details>
