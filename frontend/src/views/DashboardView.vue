@@ -122,10 +122,14 @@ async function submitOpenAccount() {
 
       <!-- Account + card summary -->
       <div class="grid md:grid-cols-2 gap-4">
-        <div class="bg-gradient-to-br from-card to-card2 border border-line rounded-2xl p-6">
-          <p class="text-sub text-sm">Checking account</p>
-          <p class="font-mono text-sub/80 text-sm mt-1">{{ me.account_number }}</p>
-          <p class="text-3xl font-bold text-text mt-4">{{ money(me.balance) }}</p>
+        <div
+          v-for="a in me.accounts"
+          :key="a.number"
+          class="bg-gradient-to-br from-card to-card2 border border-line rounded-2xl p-6"
+        >
+          <p class="text-sub text-sm">{{ a.label }} account</p>
+          <p class="font-mono text-sub/80 text-sm mt-1">{{ a.number }}</p>
+          <p class="text-3xl font-bold text-text mt-4">{{ money(a.balance) }}</p>
           <p class="text-pos text-xs mt-1">Available balance</p>
         </div>
 
