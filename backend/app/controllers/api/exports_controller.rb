@@ -11,13 +11,21 @@ module Api
     # POST /api/exports — generate a CSV export of an account's statement.
     # Body: { "account_number": "5021-0001" }
     #
-    # Account selection is scoped to the signed-in customer's own accounts (the
-    # correct pattern — contrast accounts#transactions). The file is written to
-    # tmp/exports and handed back as a download URL.
+    # VULNERABILITY 2 (Broken Access Control / IDOR): the account number is read
+    # straight from the request body and used to generate a statement export with
+    # NO check that the account belongs to `current_user`. The dashboard only ever
+    # offers the customer's own accounts in the export dropdown, so the UI looks
+    # safe — but the constraint lives only in the client. An attacker who
+    # intercepts `POST /api/exports` (Burp/ZAP) and swaps `account_number` for
+    # someone else's number — e.g. signed in as Alice, send
+    # { "account_number": "5021-0002" } — gets a CSV of Bob's full statement back
+    # via the returned download URL. Account numbers are short and sequential, so
+    # they are trivial to enumerate. The export must be scoped server-side to one
+    # of `current_user`'s own accounts, exactly like accounts#transactions does.
     def create
       account_number = params[:account_number].to_s
-      account = current_user[:accounts].find { |a| a[:number] == account_number }
-      return render json: { error: "Account not found" }, status: :not_found unless account
+      found = Store.locate_account(account_number)
+      return render json: { error: "Account not found" }, status: :not_found unless found
 
       FileUtils.mkdir_p(EXPORT_DIR)
 
@@ -26,9 +34,10 @@ module Api
       # date. Wrapping it in MD5 makes it *look* random — a 32-char hex blob — but
       # it is fully deterministic. Account numbers are short and sequential
       # (5021-000N), so an attacker can recompute the exact filename for any
-      # account on any day and pull another customer's statement export from the
-      # download endpoint, which performs no ownership check. The name should be an
-      # unguessable random token (e.g. SecureRandom.uuid) bound to the owner.
+      # account on any day and pull another customer's already-generated export
+      # from the download endpoint, which also performs no ownership check. The
+      # name should be an unguessable random token (e.g. SecureRandom.uuid) bound
+      # to the owner.
       digest   = Digest::MD5.hexdigest("#{account_number}:#{Date.today}")
       filename = "statement-#{digest}.csv"
 

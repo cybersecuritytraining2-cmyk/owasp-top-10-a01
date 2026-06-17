@@ -93,7 +93,9 @@ each of the following:
    Alice's credit-card bill?
 
 2. **Read another customer's statement.**
-   Your statement is yours alone. Can you pull up Bob's or Carol's full
+   Your statement is yours alone, and the on-screen statement picker only lists
+   *your* accounts. But the same data can be **exported** — and the export request
+   sends the account number itself. Can you pull up Bob's or Carol's full
    transaction history — salary, rent, spending and all?
 
 3. **Get hold of the application's internal logs.**
@@ -142,10 +144,14 @@ The dashboard exposes the flaws — but not all of them are obvious by clicking:
   `POST /api/cards/pay`, and rewrite `from_account` to another customer's number
   before it reaches the server. This is the more realistic class of bug: the
   client constrains the input, the server forgets to.
-- The **statement account** box is an editable text field — change it. Either way,
-  inspect the requests to `/api/accounts/<n>/transactions` in your proxy. Account
-  numbers are short and sequential (`5021-0001`, `5021-0002`, …) — trivial to
-  enumerate.
+- The **statement picker** is now a **dropdown that only lists your own
+  accounts**, and the view endpoint (`/api/accounts/<n>/transactions`) re-checks
+  ownership server-side — so that path is locked down. The **“Export CSV”** button
+  next to it is not: it sends `POST /api/exports` with the chosen `account_number`
+  in the body and the server never re-checks ownership. Intercept that request and
+  swap `account_number` for another customer's number — the same client-constrains/
+  server-forgets bug as the card payment. Account numbers are short and sequential
+  (`5021-0001`, `5021-0002`, …) — trivial to enumerate.
 
 ### 2. Code review
 Open `backend/app/controllers/` and read the controllers. Each intentional flaw
@@ -204,9 +210,9 @@ owasp-top-10/
 │   │   ├── application_controller.rb     # auth helpers (authenticate_user!, require_admin!)
 │   │   └── api/
 │   │       ├── sessions_controller.rb    # login / logout
-│   │       ├── accounts_controller.rb    # /me, statement   ← VULNERABILITY 2
+│   │       ├── accounts_controller.rb    # /me, statement   (secure: ownership-checked)
 │   │       │                             # open account     ← VULNERABILITIES 4 & 5
-│   │       ├── exports_controller.rb     # statement export ← VULNERABILITIES 6 & 7
+│   │       ├── exports_controller.rb     # statement export ← VULNERABILITIES 2, 6 & 7
 │   │       ├── transfers_controller.rb   # money transfer   (secure reference)
 │   │       ├── cards_controller.rb       # card payment     ← VULNERABILITY 1
 │   │       └── admin/dashboard_controller.rb                ← VULNERABILITY 3
@@ -244,16 +250,28 @@ funding account server-side to one of `current_user`'s own accounts (reject any
 `from_account` not in `current_user[:accounts]`), the same way `transfers#create`
 scopes the source to `current_user`.
 
-### Vulnerability 2 — Read anyone's statement (IDOR)
-`GET /api/accounts/:account_number/transactions` looks up transactions straight
-from the URL with no ownership check.
+### Vulnerability 2 — Read anyone's statement via export (IDOR)
+The on-screen statement view is *secure*: the picker is a dropdown of your own
+accounts and `GET /api/accounts/:account_number/transactions` re-checks ownership,
+so asking for someone else's account there just returns `404`. But the **export**
+takes the account number from the request body and never re-checks ownership.
+`POST /api/exports` will happily generate a CSV of *any* account's statement and
+hand you the download link:
 
 ```bash
-curl http://localhost:3000/api/accounts/5021-0002/transactions \
+# Signed in as Alice — export Bob's statement:
+curl -X POST http://localhost:3000/api/exports \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"account_number":"5021-0002"}'
+#  → {"file":"statement-<hash>.csv","download_url":"/api/exports/statement-<hash>.csv"}
+
+# …then download it (the download endpoint doesn't check ownership either):
+curl http://localhost:3000/api/exports/statement-<hash>.csv \
   -H "Authorization: Bearer $TOKEN"
 ```
-*Fix:* reject the request unless `account_number == current_user[:account_number]`
-(or the caller is staff).
+You get Bob's salary, rent and spending in full. *Fix:* scope the export
+server-side to one of `current_user`'s own accounts (reject any `account_number`
+not in `current_user[:accounts]`), exactly like `accounts#transactions` now does.
 
 ### Vulnerability 3 — Read the application logs (missing function-level authz)
 Here is the part that is **not mentioned anywhere else in this README on
@@ -351,8 +369,10 @@ predictable, and `GET /api/exports/<name>` never checks who owns the file:
 NAME="statement-$(printf '%s' "5021-0002:$(date +%F)" | md5sum | cut -d' ' -f1).csv"
 curl "http://localhost:3000/api/exports/$NAME" -H "Authorization: Bearer $TOKEN"
 ```
-You get Bob's full statement CSV. *Fix:* name exports with an unguessable random
-token (`SecureRandom.uuid`) and bind the file to its owner, enforcing ownership on
+You get Bob's full statement CSV — without ever being handed the link, and without
+needing the export-IDOR of vuln 2 (this works even against a file someone *else*
+generated). *Fix:* name exports with an unguessable random token
+(`SecureRandom.uuid`) and bind the file to its owner, enforcing ownership on
 download.
 
 ### Vulnerability 7 — Read arbitrary files (Path Traversal)

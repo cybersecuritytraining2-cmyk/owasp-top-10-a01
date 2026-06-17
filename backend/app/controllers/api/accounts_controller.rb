@@ -68,21 +68,20 @@ module Api
     # GET /api/accounts/:account_number/transactions
     # Returns the statement (transaction history) for an account.
     #
-    # VULNERABILITY 2 (Broken Access Control / IDOR): the account number comes
-    # straight from the URL and is used to look up transactions without ever
-    # checking that it belongs to `current_user`. Any authenticated customer can
-    # read anyone else's statement by changing the account number — e.g. a user
-    # signed in as 5021-0001 can request /api/accounts/5021-0002/transactions
-    # and see Bob's salary, rent, and spending. Account numbers are short and
-    # sequential, so they are trivial to enumerate.
+    # Ownership is enforced server-side: the statement can only be pulled for one
+    # of the signed-in customer's *own* accounts. The dashboard backs this with a
+    # dropdown of owned accounts, and the server re-checks here, so changing the
+    # account number in the URL to someone else's just returns 404. This is the
+    # correct pattern — contrast exports#create, which takes the account number
+    # from the request body and forgets to re-check ownership.
     def transactions
       account_number = params[:account_number]
-      found = Store.locate_account(account_number)
-      return render json: { error: "Account not found" }, status: :not_found unless found
+      account = current_user[:accounts].find { |a| a[:number] == account_number }
+      return render json: { error: "Account not found" }, status: :not_found unless account
 
       render json: {
         account_number: account_number,
-        holder:         found[:user][:name],
+        holder:         current_user[:name],
         transactions:   Store.transactions_for(account_number)
       }
     end

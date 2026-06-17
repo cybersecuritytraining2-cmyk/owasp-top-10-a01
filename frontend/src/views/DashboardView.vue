@@ -274,10 +274,18 @@ async function submitOpenAccount() {
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h2 class="text-text font-semibold">Statement</h2>
           <div class="flex items-center gap-2">
-            <input
+            <select
               v-model="statementAccount"
-              class="bg-ink border border-line rounded-lg px-3 py-1.5 text-text font-mono text-sm focus:border-brand outline-none w-36"
-            />
+              class="bg-ink border border-line rounded-lg px-3 py-1.5 text-text font-mono text-sm focus:border-brand outline-none"
+            >
+              <option
+                v-for="a in me.accounts"
+                :key="a.number"
+                :value="a.number"
+              >
+                {{ a.label }} · {{ a.number }}
+              </option>
+            </select>
             <button
               @click="loadStatement"
               class="text-sm border border-line hover:border-brand text-sub hover:text-text rounded-lg px-3 py-1.5 transition"
